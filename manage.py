@@ -3,6 +3,13 @@ from flask import Flask,session
 from flask_session import Session
 # 导入redis模块
 from redis import StrictRedis
+# 导入sqlalchemy扩展
+from flask_sqlalchemy import SQLAlchemy
+# 导入script扩展
+from flask_script import Manager
+# 导入migrate扩展
+from flask_migrate import Migrate,MigrateCommand
+
 
 app = Flask(__name__)
 # 配置密钥
@@ -12,6 +19,9 @@ app.config['SESSION_TYPE'] = 'redis'
 app.config['SESSION_REDIS'] = StrictRedis(host='127.0.0.1',port=6379)
 app.config['SESSION_USE_SIGNER'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400
+# 配置数据库的链接
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:mysql@localhost/info_python37'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 """
 项目目录搭建：
@@ -22,6 +32,14 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400
 """
 # 让Session扩展和程序实例进行关联
 Session(app)
+# 实例化sqlalchemy对象
+db = SQLAlchemy(app)
+# 实例化管理器对象
+manage = Manager(app)
+# 使用迁移框架
+Migrate(app,db)
+# 添加迁移命令
+manage.add_command('db',MigrateCommand)
 
 @app.route("/")
 def index():
@@ -30,4 +48,5 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # app.run(debug=True)
+    manage.run()
