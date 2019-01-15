@@ -1,4 +1,4 @@
-from flask import session
+
 # 导入script扩展
 from flask_script import Manager
 # 导入migrate扩展
@@ -25,12 +25,9 @@ Migrate(app,db)
 # 添加迁移命令
 manage.add_command('db',MigrateCommand)
 
-@app.route("/")
-def index():
-    session['itcast'] = '2019'
-    return 'hello world2018'
 
 
 if __name__ == '__main__':
     # app.run(debug=True)
+    print(app.url_map)
     manage.run()

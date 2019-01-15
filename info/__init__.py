@@ -25,6 +25,9 @@ def create_app(config_name):
     # 通过函数，实现db和app的关联
     db.init_app(app)
 
+    # 导入蓝图
+    from info.modules.news import news_blue
+    app.register_blueprint(news_blue)
 
     return app
 
