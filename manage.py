@@ -1,19 +1,14 @@
-from flask import Flask,session
-# 导入扩展flask_session
-from flask_session import Session
-
-# 导入sqlalchemy扩展
-from flask_sqlalchemy import SQLAlchemy
+from flask import session
 # 导入script扩展
 from flask_script import Manager
 # 导入migrate扩展
 from flask_migrate import Migrate,MigrateCommand
-# 导入配置对象
-from config import config_dict
 
-app = Flask(__name__)
-# 使用抽取出去的配置信息
-app.config.from_object(config_dict['development'])
+# 导入程序实例app
+from info import create_app,db
+
+# 调用info/__init__.py文件中的工厂函数，获取app
+app = create_app('development')
 
 """
 项目目录搭建：
@@ -22,10 +17,7 @@ app.config.from_object(config_dict['development'])
 2、抽取代码，搭建项目目录
 
 """
-# 让Session扩展和程序实例进行关联
-Session(app)
-# 实例化sqlalchemy对象
-db = SQLAlchemy(app)
+
 # 实例化管理器对象
 manage = Manager(app)
 # 使用迁移框架
