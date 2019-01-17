@@ -49,3 +49,13 @@ def create_app(config_name):
     return app
 
 
+
+"""
+import hashlib
+
+hashlib.md5
+hashlib.sha256
+from werkzeug.security import  generate_password_hash,check_password_hash
+
+"""
+
