@@ -1,15 +1,17 @@
-
 from flask import Flask
 # 导入扩展flask_session
 from flask_session import Session
 # 导入sqlalchemy扩展
 from flask_sqlalchemy import SQLAlchemy
 # 导入配置对象
-from config import config_dict
-
+from config import config_dict,Config
+# 导入redis的连接对象
+from redis import StrictRedis
 
 # 实例化sqlalchemy对象
 db = SQLAlchemy()
+# 实例化redis对象，用来保存和业务相关的数据，比如图片验证码，短信验证码
+redis_store = StrictRedis(host=Config.REDIS_HOST,port=Config.REDIS_PORT)
 
 # 导入标准日志模块和日志处理模块
 import logging
@@ -36,7 +38,6 @@ def create_app(config_name):
     # 使用抽取出去的配置信息
     app.config.from_object(config_dict[config_name])
 
-
     # 让Session扩展和程序实例进行关联
     Session(app)
     # 通过函数，实现db和app的关联
@@ -45,6 +46,8 @@ def create_app(config_name):
     # 导入蓝图
     from info.modules.news import news_blue
     app.register_blueprint(news_blue)
+    from info.modules.passport import passport_blue
+    app.register_blueprint(passport_blue)
 
     return app
 
