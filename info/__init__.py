@@ -11,7 +11,7 @@ from redis import StrictRedis
 # 实例化sqlalchemy对象
 db = SQLAlchemy()
 # 实例化redis对象，用来保存和业务相关的数据，比如图片验证码，短信验证码
-redis_store = StrictRedis(host=Config.REDIS_HOST,port=Config.REDIS_PORT)
+redis_store = StrictRedis(host=Config.REDIS_HOST,port=Config.REDIS_PORT,decode_responses=True)
 
 # 导入标准日志模块和日志处理模块
 import logging

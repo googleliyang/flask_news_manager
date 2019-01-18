@@ -176,7 +176,43 @@ function sendSMSCode() {
         return;
     }
 
-    // TODO 发送短信验证码
+    // 发送短信验证码
+    // 定义参数对象
+    var params = {
+        'mobile':mobile,
+        'image_code':imageCode,
+        'image_code_id':imageCodeId
+    }
+    // 发送ajax请求
+    $.ajax({
+        url:'/sms_code', // 请求的url地址
+        type:'post', // http请求方法
+        data:JSON.stringify(params), // 发送到后端的数据
+        contentType:'application/json', // 发送到后端的数据类型
+        success:function(resp){
+            // 如果发送成功，设置定时器
+            if (resp.errno == '0'){
+                var num = 60;
+                var t = setInterval(function(){
+                    if (num == 1){
+                        // 清除定时器对象
+                        clearInterval(t);
+                        $('.get_code').html('点击获取验证码');
+                        $('.get_code').attr('onclick','sendSMSCode();');
+                    }else{
+                        num -= 1;
+                        $('.get_code').html(num + '秒')
+                    }
+                },1000)
+
+            }else{
+                alert(resp.errmsg);
+                // $('#register-sms-code-err').html(resp.errmsg);
+                // $('#register-sms-code-err').show();
+            }
+        }
+    })
+
 }
 
 // 调用该函数模拟点击左侧按钮

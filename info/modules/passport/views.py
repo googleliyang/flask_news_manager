@@ -1,5 +1,5 @@
 # 导入flask内置的对象
-from flask import request,jsonify,current_app,make_response
+from flask import request,jsonify,current_app,make_response,session
 # 导入蓝图对象
 from . import passport_blue
 # 导入自定义的状态码
@@ -7,12 +7,13 @@ from info.utils.response_code import RET
 # 导入工具captcha
 from info.utils.captcha.captcha import captcha
 # 导入redis数据库的实例
-from info import redis_store,constants
+from info import redis_store,constants,db
 # 导入正则
 import re,random
 # 导入云通讯
 from info.libs.yuntongxun.sms import CCP
-
+# 导入模型类
+from info.models import User
 
 
 # 前端index.html文件中的153行img标签的src属性，
@@ -71,6 +72,12 @@ def send_sms_code():
     11、判断发送是否成功
     12、返回结果
 
+    var params = {
+        'mobile':mobile,
+        'image_code':imageCode,
+        'image_code_id':imageCodeId
+    }
+
     :return:
     """
     # 获取参数
@@ -83,6 +90,8 @@ def send_sms_code():
     # 检查手机号的格式:13012345678 99999
     if not re.match(r'1[3456789]\d{9}$',mobile):
         return jsonify(errno=RET.PARAMERR,errmsg='手机号格式错误')
+    # ------
+
     # 检查图片验证码，对比，从redis中获取真实的图片验证码和用户的图片验证码进行比较
     try:
         real_image_code = redis_store.get('ImageCode_' + image_code_id)
@@ -100,6 +109,18 @@ def send_sms_code():
     # 比较图片验证码是否正确
     if real_image_code.lower() != image_code.lower():
         return jsonify(errno=RET.DATAERR,errmsg='图片验证码错误')
+    # 检查手机号是否注册
+    try:
+        # User.query.filter_by(mobile=mobile).first()
+        user = User.query.filter(User.mobile==mobile).first()
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询用户数据失败')
+    else:
+        # 判断查询结果，用户是否注册
+        if user is not None:
+            return jsonify(errno=RET.DATAEXIST,errmsg='手机号已注册')
+
     # 生成6位数的短信随机码
     sms_code = '%06d' % random.randint(0, 999999)
     print(sms_code)
@@ -122,6 +143,87 @@ def send_sms_code():
         return jsonify(errno=RET.OK,errmsg='发送成功')
     else:
         return jsonify(errno=RET.THIRDERR,errmsg='发送失败')
+
+
+@passport_blue.route('/register',methods=['POST'])
+def register():
+    """
+    用户注册---本质是把用户信息写入mysql数据库
+    获取参数----检查参数----业务处理----返回结果
+    1、获取参数，mobile，sms_code,password
+    2、检查参数的完整性
+    3、检查手机号格式
+    4、检查短信验证码，尝试从redis中获取真实的短信验证码
+    5、判断获取结果
+    6、先比较短信验证码是否正确，因为短信验证码可以比较多次！！比较多次的本质就是可以get数据库多次
+    7、删除redis中存储的真实短信验证码
+    8、确认用户未注册
+    9、使用模型类保存用户数据，密码进行加密存储
+    10、提交数据到mysql数据库，如果发生异常，需要回滚
+    11、实现状态保持，缓存用户信息到redis中
+    12、返回结果
+
+    """
+    # 获取参数
+    mobile = request.json.get("mobile")
+    sms_code = request.json.get("sms_code")
+    password = request.json.get("password")
+    # 检查参数的完整性
+    if not all([mobile,sms_code,password]):
+        return jsonify(errno=RET.PARAMERR,errmsg='参数错误')
+    # 检查手机号格式
+    if not re.match(r'1[3456789]\d{9}$',mobile):
+        return jsonify(errno=RET.PARAMERR,errmsg='手机号格式错误')
+    # 尝试从redis中获取短信验证码
+    try:
+        real_sms_code = redis_store.get('SMSCode_' + mobile)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询数据失败')
+    # 判断查询结果
+    if not real_sms_code:
+        return jsonify(errno=RET.NODATA,errmsg='数据已过期')
+    # 先比较短信验证码是否正确
+    if real_sms_code != str(sms_code):
+        return jsonify(errno=RET.DATAERR,errmsg='短信验证码错误')
+    # 删除redis中的短信验证码
+    try:
+        redis_store.delete('SMSCode_' + mobile)
+    except Exception as e:
+        current_app.logger.error(e)
+    # 确认用户是否已注册
+    try:
+        # User.query.filter_by(mobile=mobile).first()
+        user = User.query.filter(User.mobile==mobile).first()
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询用户数据失败')
+    else:
+        # 判断查询结果，用户是否注册
+        if user is not None:
+            return jsonify(errno=RET.DATAEXIST,errmsg='手机号已注册')
+    # 构造模型类对象，保存用户数据
+    user = User()
+    user.mobile = mobile
+    user.nick_name = mobile
+    # 本质上调用了模型类中的generate_password_hash函数(werkzeug模块)，实现了密码加密存储
+    user.password = password
+    # 提交数据到mysql
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(e)
+        # 如果保存数据发生异常，需要进行回滚
+        db.session.rollback()
+        return jsonify(errno=RET.DBERR,errmsg='保存数据失败')
+    # 缓存用户信息，实现状态保持
+    session['user_id'] = user.id
+    session['mobile'] = mobile
+    session['nick_name'] = mobile
+    # 返回结果
+    return jsonify(errno=RET.OK,errmsg='注册成功')
+
 
     pass
 
