@@ -14,7 +14,8 @@ import re,random
 from info.libs.yuntongxun.sms import CCP
 # 导入模型类
 from info.models import User
-
+# 导入日期模块
+from datetime import datetime
 
 # 前端index.html文件中的153行img标签的src属性，
 # 应该指向当前的视图函数
@@ -224,6 +225,72 @@ def register():
     # 返回结果
     return jsonify(errno=RET.OK,errmsg='注册成功')
 
+
+@passport_blue.route("/login",methods=['POST'])
+def login():
+    """
+    登录
+    获取参数----检查参数----业务处理----返回结果
+    1、获取参数，mobile，password
+    2、检查参数的完整性
+    3、检查手机号格式
+    4、根据手机号查询数据库，确认用户已注册
+    5、判断查询结果
+    6、判断密码是否正确
+    7、保存用户的登录时间，提交数据到mysql数据库
+    8、实现状态保持
+    9、返回结果
+    user = User()
+    user.check_password(password)
+    user = User.query.filter(User.mobile==mobile).first()
+    user.check_psssword(password)
+
+    :return:
+    """
+    # 获取参数
+    mobile = request.json.get('mobile')
+    password = request.json.get('password')
+    # 检查参数的完整性
+    if not all([mobile,password]):
+        return jsonify(errno=RET.PARAMERR,errmsg='参数错误')
+    # 检查手机号格式
+    if not re.match(r'1[3456789]\d{9}$',mobile):
+        return jsonify(errno=RET.PARAMERR,errmsg='手机号格式错误')
+    # 根据手机号查询用户是否存在
+    try:
+        user = User.query.filter_by(mobile=mobile).first()
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询数据失败')
+
+    # 判断查询结果是否存在
+    # if not user:
+    #     return jsonify(errno=RET.NODATA,errmsg='用户未注册')
+    # 判断密码是否正确
+    # if not user.check_password(password):
+    #     return jsonify(errno=RET.PWDERR,errmg='密码错误')
+
+    # 判断用户和密码
+    if not user or not user.check_password(password):
+        return jsonify(errno=RET.PWDERR,errmsg='用户名或密码错误')
+    # 保存用户的登录时间
+    # 如果是import datetime 调用：datetime.datetime.now()
+    user.last_login = datetime.now()
+    # 提交数据到mysql
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(e)
+        db.session.rollback()
+        return jsonify(errno=RET.DBERR,errmsg='保存数据失败')
+    # 状态保持，缓存用户信息
+    session['user_id'] = user.id
+    session['mobile'] = mobile
+    # 登录可以执行多次,如果用户修改了昵称，为修改后的结果，如果没有修改，还是手机号
+    session['nick_name'] = user.nick_name
+    # 返回结果
+    return jsonify(errno=RET.OK,errmsg='OK')
 
     pass
 

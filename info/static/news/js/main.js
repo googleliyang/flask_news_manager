@@ -154,7 +154,7 @@ $(function(){
         $.ajax({
             url:'/register',
             type:'post',
-            data:JSON.stringify(params),
+            data:JSON.stringify(params), // 把前端的对象转成json字符串
             contentType:'application/json',
             success:function(data){ // data表示后端返回的响应数据
                 if (data.errno == '0'){
