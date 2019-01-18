@@ -1,18 +1,42 @@
 from flask import session,render_template,current_app
 # 导入蓝图对象
 from . import news_blue
+# 导入模型类
+from info.models import User
+
 
 @news_blue.route("/")
 def index():
     """
     项目首页加载
     1、使用模板加载项目首页----把static文件夹粘贴到info/目录下
-
-
+    展示用户信息：检查用户登录状态-----如果用户已登录显示用户信息，否则提供登录注册入口
+    1、尝试从redis中获取用户的session信息
+    2、如果获取到user_id,根据user_id查询用户信息
+    3、把查询结果作为用户数据返回给模板
     :return:
     """
-    session['itcast'] = '2019'
-    return render_template('news/index.html')
+    # 从redis中获取user_id
+    user_id = session.get('user_id')
+    # 根据user_id查询mysql数据库
+    user = None
+    if user_id:
+        try:
+            user = User.query.get(user_id)
+        except Exception as e:
+            current_app.logger.error(e)
+
+    # 定义字典，给模板传入用户数据
+    # if user:
+    #     user.to_dict()
+    # else:
+    #     user = None
+
+    data = {
+        'user_info':user.to_dict() if user else None
+    }
+
+    return render_template('news/index.html',data=data)
 
 
 @news_blue.route("/favicon.ico")
