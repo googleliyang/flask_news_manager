@@ -113,9 +113,9 @@ $(function(){
     })
 
 
-    // TODO 注册按钮点击
+    // 注册按钮点击
     $(".register_form_con").submit(function (e) {
-        // 阻止默认提交操作
+        // 阻止默认提交操作，阻止浏览器对表单的默认提交
         e.preventDefault()
 
 		// 取到用户输入的内容
@@ -144,6 +144,29 @@ $(function(){
         }
 
         // 发起注册请求
+        // 定义对象，用来存储发送到后端的数据
+        var params = {
+            'mobile':mobile,
+            'sms_code':smscode,
+            'password':password
+        };
+        // 发送ajax请求
+        $.ajax({
+            url:'/register',
+            type:'post',
+            data:JSON.stringify(params),
+            contentType:'application/json',
+            success:function(data){ // data表示后端返回的响应数据
+                if (data.errno == '0'){
+                    location.reload(); // 刷新当前页面
+                    // window.location.href('/')  项目首页
+                }else{
+                    alert(data.errmsg);
+                    // $('#register-password-err').html(data.errmsg);
+                    // $('#register-password-err').show();
+                }
+            }
+        })
 
     })
 })
