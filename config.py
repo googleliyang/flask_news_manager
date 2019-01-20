@@ -3,7 +3,7 @@ from redis import StrictRedis
 
 class Config:
     DEBUG = None
-    # 配置密钥
+    # 配置密钥,不仅给Session使用，还给CSRF保护生成csrf_token使用。
     SECRET_KEY = 'mMr88P+cvbxFXvcpX9PpiBTWMDLtGNkI7fwKhVv7GWuv9QZyRoyUsw=='
 
     # 配置数据库的链接

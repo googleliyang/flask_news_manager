@@ -37,6 +37,25 @@ $(function(){
 		$(this).children('.input_tip').animate({'top':-5,'font-size':12},'fast').siblings('input').focus().parent().addClass('hotline');
 	})
 
+
+    // 注册框和登录框的手机号文字上移
+    // $('.form_mobile').on('click focusin',function(){
+		// $(this).children('.input_tip').animate({'top':-5,'font-size':12},'fast').focus().parent().addClass('hotline');
+    // })
+    // // 注册框的图片验证码文字上移
+    // $('.form_image').on('click focusin',function(){
+		// $(this).children('.input_tip').animate({'top':-5,'font-size':12},'fast').focus().parent().addClass('hotline');
+    // })
+    // // 注册框的短信验证码文字上移
+    // $('.form_sms').on('click focusin',function(){
+		// $(this).children('.input_tip').animate({'top':-5,'font-size':12},'fast').focus().parent().addClass('hotline');
+    // })
+    // // 注册框和登录框的密码提示文字上移
+    // $('.form_pswd').on('click focusin',function(){
+		// $(this).children('.input_tip').animate({'top':-5,'font-size':12},'fast').focus().parent().addClass('hotline');
+    // })
+
+
 	// 输入框失去焦点，如果输入框为空，则提示文字下移
 	$('.form_group input').on('blur focusout',function(){
 		$(this).parent().removeClass('hotline');
@@ -121,6 +140,9 @@ $(function(){
             type:'post',
             data:JSON.stringify(params),
             contentType:'application/json',
+            headers:{
+                'X-CSRFToken':getCookie('csrf_token')
+            },
             success:function(resp){
                 if (resp.errno == '0'){
                     location.reload();
@@ -178,6 +200,9 @@ $(function(){
             type:'post',
             data:JSON.stringify(params), // 把前端的对象转成json字符串
             contentType:'application/json',
+            headers:{
+                'X-CSRFToken':getCookie('csrf_token')
+            },
             success:function(data){ // data表示后端返回的响应数据
                 if (data.errno == '0'){
                     location.reload(); // 刷新当前页面
@@ -234,6 +259,9 @@ function sendSMSCode() {
         type:'post', // http请求方法
         data:JSON.stringify(params), // 发送到后端的数据
         contentType:'application/json', // 发送到后端的数据类型
+        headers:{
+                'X-CSRFToken':getCookie('csrf_token')
+        },
         success:function(resp){
             // 如果发送成功，设置定时器
             if (resp.errno == '0'){
@@ -294,3 +322,13 @@ function generateUUID() {
     });
     return uuid;
 }
+
+// 用户退出
+function logout(){
+    $.get('/logout',function (resp) {
+        // 重新加载当前页面
+        location.reload()
+    })
+}
+
+

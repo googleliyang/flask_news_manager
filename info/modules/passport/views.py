@@ -292,6 +292,25 @@ def login():
     # 返回结果
     return jsonify(errno=RET.OK,errmsg='OK')
 
+
+
+@passport_blue.route("/logout")
+def logout():
+    """
+    用户退出
+    1、退出的本质，是把服务器缓存的用户信息清除
+    2、把redis中缓存的用户信息清除，不能使用flashdb。
+
+    :return:
+    """
+    # 使用请求上下文对象session，从redis中，清除指定的用户信息
+    # session.clear() 清除所有的session信息，不建议使用。
+    session.pop('user_id',None)
+    session.pop('mobile',None)
+    session.pop('nick_name',None)
+    # 返回结果
+    return jsonify(errno=RET.OK,errmsg='退出成功')
+
     pass
 
 

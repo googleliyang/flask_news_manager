@@ -7,6 +7,9 @@ from flask_sqlalchemy import SQLAlchemy
 from config import config_dict,Config
 # 导入redis的连接对象
 from redis import StrictRedis
+# 导入wtf扩展包提供的csrf保护模块
+from flask_wtf import CSRFProtect,csrf
+
 
 # 实例化sqlalchemy对象
 db = SQLAlchemy()
@@ -42,6 +45,25 @@ def create_app(config_name):
     Session(app)
     # 通过函数，实现db和app的关联
     db.init_app(app)
+    # 项目开启csrf保护
+    CSRFProtect(app)
+    # 生成csrf_token令牌，给每个请求的客户端
+    """
+    csrf保护的实现：
+    1、在后端首先开启保护，CSRFProtect会验证http请求方法中的post、put、patch、delete四种；
+    2、还会验证请求头中是否设置X-CSRFToken或者X-CSRF-Token其中之一。
+    3、会比较ajax请求信息中的token和cookie中的token是否一致，如果一致，请求合法，否则，滚！
+    区别：
+    1、原来是表单，比较的是表单中的token和cookie中的token是否一致。
+    2、现在是ajax，比较的是ajax中token和cookie中的token是否一致。
+    
+    """
+    @app.after_request
+    def after_request(response):
+        csrf_token = csrf.generate_csrf()
+        response.set_cookie('csrf_token',csrf_token)
+        return response
+
 
     # 导入蓝图
     from info.modules.news import news_blue
