@@ -281,6 +281,8 @@ function sendSMSCode() {
             }else{
                 alert(resp.errmsg);
                 // generateImageCode()
+                // $('.get_code').html('点击获取验证码');
+                // $('.get_code').attr('onclick','sendSMSCode();');
                 // $('#register-sms-code-err').html(resp.errmsg);
                 // $('#register-sms-code-err').show();
             }

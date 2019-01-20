@@ -1,4 +1,4 @@
-from flask import session, render_template, current_app, jsonify, request
+from flask import session, render_template, current_app, jsonify, request, g
 # 导入蓝图对象
 from . import news_blue
 # 导入模型类
@@ -6,9 +6,14 @@ from info.models import User,Category,News
 # 导入自定义的状态码
 from info.utils.response_code import RET
 # 导入常量文件
-from info import constants
+from info import constants,db
+# 导入登录验证装饰器
+from info.utils.commons import login_required
+
+
 
 @news_blue.route("/")
+@login_required
 def index():
     """
     项目首页加载
@@ -37,14 +42,15 @@ def index():
     :return:
     """
     # 从redis中获取user_id
-    user_id = session.get('user_id')
-    # 根据user_id查询mysql数据库
-    user = None
-    if user_id:
-        try:
-            user = User.query.get(user_id)
-        except Exception as e:
-            current_app.logger.error(e)
+    # user_id = session.get('user_id')
+    # # 根据user_id查询mysql数据库
+    # user = None
+    # if user_id:
+    #     try:
+    #         user = User.query.get(user_id)
+    #     except Exception as e:
+    #         current_app.logger.error(e)
+    user = g.user
 
     # 加载新闻分类数据
     try:
@@ -155,12 +161,75 @@ def get_news_list():
     return jsonify(errno=RET.OK,errmsg='OK',data=data)
 
 
+@news_blue.route("/<int:news_id>")
+@login_required
+def news_detail(news_id):
+    """
+    新闻详情页面
+    1、使用模板展示数据，用户数据、点击排行，首页已经实现，直接复制过来
+    2、url中传入新闻id，直接根据新闻id查询新闻的详情信息
+    3、判断查询结果
+    4、新闻点击次数加1，提交数据到mysql
+    5、如果查询到新闻数据，调用模型类中to_dict函数
+
+    :param news_id:
+    :return:
+    """
+    # 从redis中获取user_id
+    # user_id = session.get('user_id')
+    # # 根据user_id查询mysql数据库
+    # user = None
+    # if user_id:
+    #     try:
+    #         user = User.query.get(user_id)
+    #     except Exception as e:
+    #         current_app.logger.error(e)
+    # 从登录验证装饰器的g对象中，取出user
+    user = g.user
+
+    # 新闻点击排行数据加载
+    try:
+        news_rank = News.query.order_by(News.clicks.desc()).limit(constants.CLICK_RANK_MAX_NEWS)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询新闻排行数据失败')
+    # 判断查询结果
+    if not news_rank:
+        return jsonify(errno=RET.NODATA,errmsg='无新闻点击排行数据')
+    # 遍历查询结果
+    news_rank_list = []
+    for news in news_rank:
+        news_rank_list.append(news.to_dict())
+
+    # 新闻详情数据加载
+    try:
+        news = News.query.get(news_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询新闻详情数据失败')
+    # 判断查询结果
+    if not news:
+        return jsonify(errno=RET.NODATA,errmsg='无新闻详情数据')
+    # 新闻点击次数加1
+    news.clicks += 1
+    # 保存新闻点击次数数据到mysql
+    try:
+        db.session.add(news)
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(e)
+        db.session.rollback()
+        return jsonify(errno=RET.DBERR,errmsg='保存数据失败')
+
+    # 定义字典数据，返回模板
+    data = {
+        'user_info':user.to_dict() if user else None,
+        'news_rank_list':news_rank_list,
+        'news_detail':news.to_dict()
+    }
 
 
-
-
-
-    pass
+    return render_template('news/detail.html',data=data)
 
 
 
