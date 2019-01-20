@@ -69,6 +69,7 @@ function updateNewsData() {
         if (resp.errno == "0"){
             total_page = resp.data.total_page
             if (cur_page == 1){
+                // 把当前ul列表下的li全部清空
                 $(".list_con").html("")
             }
 
@@ -83,6 +84,7 @@ function updateNewsData() {
                 content += '<div class="time fl">' + news.create_time + '</div>'
                 content += '</div>'
                 content += '</li>'
+                // 把拼接后的新闻数据，重新添加到ul列表下
                 $(".list_con").append(content)
 
             }

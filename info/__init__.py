@@ -64,6 +64,11 @@ def create_app(config_name):
         response.set_cookie('csrf_token',csrf_token)
         return response
 
+    # 导入自定义的过滤器
+    from info.utils.commons import index_filter
+    # 第一个参数表示自定义的函数名，第二个参数表示过滤器的名称
+    app.add_template_filter(index_filter,'index_filter')
+
 
     # 导入蓝图
     from info.modules.news import news_blue
