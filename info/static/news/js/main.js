@@ -280,6 +280,7 @@ function sendSMSCode() {
 
             }else{
                 alert(resp.errmsg);
+                // generateImageCode()
                 // $('#register-sms-code-err').html(resp.errmsg);
                 // $('#register-sms-code-err').show();
             }

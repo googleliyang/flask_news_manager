@@ -1,19 +1,30 @@
-from flask import session,render_template,current_app
+from flask import session,render_template,current_app,jsonify
 # 导入蓝图对象
 from . import news_blue
 # 导入模型类
-from info.models import User
+from info.models import User,Category
+# 导入自定义的状态码
+from info.utils.response_code import RET
 
 
 @news_blue.route("/")
 def index():
     """
     项目首页加载
+    一、加载用户信息
     1、使用模板加载项目首页----把static文件夹粘贴到info/目录下
     展示用户信息：检查用户登录状态-----如果用户已登录显示用户信息，否则提供登录注册入口
     1、尝试从redis中获取用户的session信息
     2、如果获取到user_id,根据user_id查询用户信息
     3、把查询结果作为用户数据返回给模板
+
+    二、加载新闻分类
+    1、查询新闻分类数据，mysql
+    ca = Category.query.all()
+    2、判断查询结果是否有数据
+    3、如果有数据，遍历查询结果，调用模型类中的to_dict函数
+    4、返回新闻分类数据
+
     :return:
     """
     # 从redis中获取user_id
@@ -26,14 +37,29 @@ def index():
         except Exception as e:
             current_app.logger.error(e)
 
+    # 加载新闻分类数据
+    try:
+        categories = Category.query.all()
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询分类数据失败')
+    # 判断查询结果
+    if not categories:
+        return jsonify(errno=RET.NODATA,errmsg='无新闻分类数据')
+    # 遍历查询结果，调用模型类中的to_dict函数，获取字典数据
+    category_list = []
+    for category in categories:
+        category_list.append(category.to_dict())
+
+
     # 定义字典，给模板传入用户数据
     # if user:
     #     user.to_dict()
     # else:
     #     user = None
-
     data = {
-        'user_info':user.to_dict() if user else None
+        'user_info':user.to_dict() if user else None,
+        'category_list':category_list
     }
 
     return render_template('news/index.html',data=data)
