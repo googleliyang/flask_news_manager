@@ -2,7 +2,7 @@ from flask import session, render_template, current_app, jsonify, request, g
 # 导入蓝图对象
 from . import news_blue
 # 导入模型类
-from info.models import User,Category,News
+from info.models import User,Category,News,Comment
 # 导入自定义的状态码
 from info.utils.response_code import RET
 # 导入常量文件
@@ -227,12 +227,25 @@ def news_detail(news_id):
     if user and news in user.collection_news:
         is_collected = True
 
+    # 新闻评论的模板数据
+    try:
+        comments = Comment.query.filter(Comment.news_id == news_id).order_by(Comment.create_time.desc()).all()
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询新闻评论数据失败')
+    # 判断查询结果
+    # if comments:
+    comments_list = []
+    for comment in comments:
+        comments_list.append(comment.to_dict())
+
     # 定义字典数据，返回模板
     data = {
         'user_info':user.to_dict() if user else None,
         'news_rank_list':news_rank_list,
         'news_detail':news.to_dict(),
-        'is_collected':is_collected
+        'is_collected':is_collected,
+        'comments':comments_list
     }
 
     return render_template('news/detail.html',data=data)
@@ -303,6 +316,73 @@ def user_collection():
         return jsonify(errno=RET.DBERR,errmsg='保存数据失败')
     # 返回结果
     return jsonify(errno=RET.OK,errmsg='OK')
+
+
+@news_blue.route('/news_comment',methods=['POST'])
+@login_required
+def news_comment():
+    """
+    新闻评论和回复评论
+    1、判断用户是否登录
+    2、获取参数，news_id,comment,parent_id
+    3、检查参数的完整性news_id,comment
+    4、转换参数的类型，需要判断parent_id是否存在
+    5、根据新闻id查询新闻数据
+    6、判断查询结果
+    7、构造模型类对象Comment，保存新闻评论数据
+    8、提交数据到mysql
+    9、返回评论数据
+
+    :return:
+    """
+    # 尝试获取用户信息
+    user = g.user
+    if not user:
+        return jsonify(errno=RET.SESSIONERR,errmsg='用户未登录')
+    # 获取参数
+    news_id = request.json.get('news_id')
+    comment = request.json.get('comment')
+    parent_id = request.json.get('parent_id')
+    # 检查参数的完整性
+    if not all([news_id,comment]):
+        return jsonify(errno=RET.PARAMERR,errmsg='参数缺失')
+    # 转换参数的数据类型
+    try:
+        news_id = int(news_id)
+        # 判断如果父评论id存在
+        if parent_id:
+            parent_id = int(parent_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.PARAMERR,errmsg='参数类型错误')
+    # 根据新闻id查询数据库
+    try:
+        news = News.query.get(news_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询新闻数据失败')
+    # 判断查询结果
+    if not news:
+        return jsonify(errno=RET.NODATA,errmsg='无新闻数据')
+    # 构造模型类对象，保存新闻评论数据
+    comments = Comment()
+    comments.user_id = user.id
+    comments.news_id = news.id
+    comments.content = comment
+    # 判断如果有父评论
+    if parent_id:
+        comments.parent_id = parent_id
+    # 提交数据到mysql数据
+    try:
+        db.session.add(comments)
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(e)
+        db.session.rollback()
+        return jsonify(errno=RET.DBERR,errmsg='保存评论数据失败')
+    # 返回数据
+    return jsonify(errno=RET.OK,errmsg='OK',data=comments.to_dict())
+
 
 
 
