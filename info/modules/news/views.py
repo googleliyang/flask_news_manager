@@ -221,15 +221,104 @@ def news_detail(news_id):
         db.session.rollback()
         return jsonify(errno=RET.DBERR,errmsg='保存数据失败')
 
+    # 定义变量，用来标记收藏还是取消收藏
+    is_collected = False
+    # 判断用户登录，或者该新闻是用户已经收藏
+    if user and news in user.collection_news:
+        is_collected = True
+
     # 定义字典数据，返回模板
     data = {
         'user_info':user.to_dict() if user else None,
         'news_rank_list':news_rank_list,
-        'news_detail':news.to_dict()
+        'news_detail':news.to_dict(),
+        'is_collected':is_collected
     }
 
-
     return render_template('news/detail.html',data=data)
+
+
+@news_blue.route("/news_collect",methods=['POST'])
+@login_required
+def user_collection():
+    """
+    收藏和取消收藏
+    获取参数---检查参数---业务处理---返回结果
+    1、使用g对象尝试获取用户信息，如果用户未登录，直接返回错误信息，提示用户登录
+    2、获取参数，news_id,action[collect,cancel_collect]
+    3、检查参数的完整性
+    4、转换新闻id的数据类型
+    5、检查action参数的范围
+    6、根据新闻id查询数据库，确认新闻的存在
+    7、判断用户选择的是收藏或取消收藏
+    收藏：user.collection_news.append(news) 用户未收藏过！！！
+    取消：user.collection_news.remove(news)
+    8、提交数据
+    9、返回结果
+
+    :return:
+    """
+    # 判断用户登录
+    user = g.user
+    if not user:
+        return jsonify(errno=RET.SESSIONERR,errmsg='用户未登录')
+    # 获取参数
+    news_id = request.json.get('news_id')
+    action = request.json.get('action')
+    # 检查参数的完整性
+    if not all([news_id,action]):
+        return jsonify(errno=RET.PARAMERR,errmsg='参数错误')
+    # 转换参数类型
+    try:
+        news_id = int(news_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.PARAMERR,errmsg='参数类型错误')
+    # 检查action参数的范围
+    if action not in ['collect','cancel_collect']:
+        return jsonify(errno=RET.PARAMERR,errmsg='参数范围错误')
+    # 查询mysql，确认新闻的存在
+    try:
+        news = News.query.get(news_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR,errmsg='查询新闻数据失败')
+    # 判断查询结果
+    if not news:
+        return jsonify(errno=RET.NODATA,errmsg='无新闻数据')
+    # 如果用户选择收藏,需要判断用户未收藏过该新闻
+    if action == 'collect':
+        if news not in user.collection_news:
+            user.collection_news.append(news)
+    # 如果取消收藏
+    else:
+        user.collection_news.remove(news)
+    # 提交数据到mysql
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(e)
+        db.session.rollback()
+        return jsonify(errno=RET.DBERR,errmsg='保存数据失败')
+    # 返回结果
+    return jsonify(errno=RET.OK,errmsg='OK')
+
+
+
+
+
+
+    pass
+
+
+
+
+
+
+
+
+
 
 
 
