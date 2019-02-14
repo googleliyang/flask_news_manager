@@ -2,7 +2,7 @@ from flask import session, render_template, current_app, jsonify, request, g
 # 导入蓝图对象
 from . import news_blue
 # 导入模型类
-from info.models import User,Category,News,Comment
+from info.models import User, Category, News, Comment, CommentLike
 # 导入自定义的状态码
 from info.utils.response_code import RET
 # 导入常量文件
@@ -122,6 +122,7 @@ def get_news_list():
     :return:
     """
     # 获取参数，get请求，args属性
+    # # http://127.0.0.1:5000/news_list?cid=1&page=1
     cid = request.args.get("cid",'1')
     page = request.args.get('page','1')
     per_page = request.args.get('per_page','10')
@@ -235,9 +236,33 @@ def news_detail(news_id):
         return jsonify(errno=RET.DBERR,errmsg='查询新闻评论数据失败')
     # 判断查询结果
     # if comments:
-    comments_list = []
+    # comments_list = []
+    # for comment in comments:
+    #     comments_list.append(comment.to_dict())
+
+    # 展示评论点赞
+    comment_like_ids = []
+    # 获取当前登录用户的所有评论的id，
+    if user:
+        try:
+            comment_ids = [comment.id for comment in comments]
+            # 再查询点赞了哪些评论
+            comment_likes = CommentLike.query.filter(CommentLike.comment_id.in_(comment_ids),
+                                                     CommentLike.user_id == g.user.id).all()
+            # 遍历点赞的评论数据,获取
+            comment_like_ids = [comment_like.comment_id for comment_like in comment_likes]
+        except Exception as e:
+            current_app.logger.error(e)
+    # 定义容器存储数据
+    comment_dict_list = []
     for comment in comments:
-        comments_list.append(comment.to_dict())
+        comment_dict = comment.to_dict()
+        # 如果未点赞
+        comment_dict['is_like'] = False
+        # 如果点赞
+        if comment.id in comment_like_ids:
+            comment_dict['is_list'] = True
+        comment_dict_list.append(comment_dict)
 
     # 定义字典数据，返回模板
     data = {
@@ -245,7 +270,7 @@ def news_detail(news_id):
         'news_rank_list':news_rank_list,
         'news_detail':news.to_dict(),
         'is_collected':is_collected,
-        'comments':comments_list
+        'comments':comment_dict_list
     }
 
     return render_template('news/detail.html',data=data)
@@ -389,7 +414,120 @@ def news_comment():
 
 
 
-    pass
+
+
+
+
+@news_blue.route('/comment_like', methods=['POST'])
+@login_required
+def comment_like():
+    """
+    点赞或取消点赞
+    1、获取用户登录信息
+    2、获取参数，comment_id,action
+    3、检查参数的完整性
+    4、判断action是否为add，remove
+    5、把comment_id转成整型
+    6、根据comment_id查询数据库
+    7、判断查询结果
+    8、判断行为是点赞还是取消点赞
+    9、如果为点赞，查询改评论，点赞次数加1，否则减1
+    10、提交数据
+    11、返回结果
+
+    :return:
+    """
+    user = g.user
+    comment_id = request.json.get('comment_id')
+    action = request.json.get('action')
+    if not all([comment_id, action]):
+        return jsonify(errno=RET.PARAMERR, errmsg='参数不完整')
+    if action not in ['add', 'remove']:
+        return jsonify(errno=RET.PARAMERR, errmsg='参数错误')
+    try:
+        comment_id = int(comment_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='参数错误')
+    try:
+        comments = Comment.query.get(comment_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='保存数据失败')
+    if not comments:
+        return jsonify(errno=RET.NODATA, errmsg='评论不存在')
+    # 如果选择的是点赞
+    if action == 'add':
+        comment_like = CommentLike.query.filter(CommentLike.user_id == user.id,
+                                                CommentLike.comment_id == comment_id).first()
+        # 判断查询结果，如果没有点赞过
+        if not comment_like:
+            comment_like = CommentLike()
+            comment_like.user_id = user.id
+            comment_like.comment_id = comment_id
+            # 把数据提交给数据库会话对象，点赞次数加1
+            db.session.add(comment_like)
+            comments.like_count += 1
+    # 如果取消点赞
+    else:
+        comment_like = CommentLike.query.filter(CommentLike.user_id == user.id,
+                                                CommentLike.comment_id == comment_id).first()
+        if comment_like:
+            db.session.delete(comment_like)
+            comments.like_count -= 1
+    # 无论点赞还是取消点赞，提交数据
+    try:
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(e)
+        db.session.rollback()
+        return jsonify(errno=RET.DBERR, errmsg='保存数据失败')
+
+    return jsonify(errno=RET.OK, errmsg='OK')
+
+@news_blue.route('/followed_user', methods=['POST'])
+@login_required
+def followed_user():
+    """
+    关注与取消关注
+    1、获取用户信息,如果未登录直接返回
+    2、获取参数，user_id和action
+    3、检查参数的完整性
+    4、校验参数，action是否为followed，unfollow
+    5、根据用户id获取被关注的用户
+    6、判断获取结果
+    7、根据对应的action执行操作，关注或取消关注
+    8、返回结果
+    :return:
+    """
+    user = g.user
+    if not user:
+        return jsonify(errno=RET.SESSIONERR, errmsg='用户未登录')
+    user_id = request.json.get('user_id')
+    action = request.json.get('action')
+    if not all([user_id, action]):
+        return jsonify(errno=RET.PARAMERR, errmsg='参数不完整')
+    if action not in ['follow', 'unfollow']:
+        return jsonify(errno=RET.PARAMERR, errmsg='参数错误')
+    try:
+        other = User.query.get(user_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='查询数据失败')
+    if not other:
+        return jsonify(errno=RET.NODATA, errmsg='无用户数据')
+    # 如果选择关注
+    if action == 'follow':
+        if other not in user.followed:
+            user.followed.append(other)
+        else:
+            return jsonify(errno=RET.DATAEXIST, errmsg='当前用户已被关注')
+    # 取消关注
+    else:
+        if other in user.followed:
+            user.followed.remove(other)
+
+    return jsonify(errno=RET.OK, errmsg='OK')
 
 
 

@@ -5,7 +5,7 @@ from info import db,constants
 # 导入七牛云
 from info.utils.image_storage import storage
 # 导入模型类
-from info.models import Category,News
+from info.models import Category, News, User
 # 导入蓝图
 from . import profile_blue
 
@@ -232,10 +232,251 @@ def news_release():
     # 返回结果
     return jsonify(errno=RET.OK,errmsg='OK')
 
+@profile_blue.route("/pass_info", methods=['GET', 'POST'])
+@login_required
+def pass_info():
+    """
+    个人中心：修改密码
+    1、判断请求方法，如果get请求，默认渲染模板页面
+    2、获取参数，old_password,new_password
+    3、检查参数的完整性
+    4、获取用户信息，用来对旧密码进行校验是否正确
+    5、更新用户新密码
+    6、返回结果
+    :return:
+    """
+    # 如果是get请求,默认渲染模板页面
+    if request.method == 'GET':
+        return render_template('news/user_pass_info.html')
+    # 获取参数
+    old_password = request.json.get('old_password')
+    new_password = request.json.get('new_password')
+    # 检查参数的完整性
+    if not all([old_password, new_password]):
+        return jsonify(errno=RET.PARAMERR, errmsg='参数缺失')
+    # 获取用户的登录信息
+    user = g.user
+    if not user:
+        return jsonify(errno=RET.SESSIONERR, errmsg='用户未登录')
+    # 校验密码是否正确
+    if not user.check_password(old_password):
+        return jsonify(errno=RET.PWDERR, errmsg='旧密码错误')
+    # 如果旧密码正确，更新新密码到数据库
+    user.password = new_password
+    # 提交数据到数据库
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(e)
+        db.session.rollback()
+        return jsonify(errno=RET.DBERR, errmsg='保存数据失败')
+    # 返回结果
+    return jsonify(errno=RET.OK, errmsg='OK')
 
+@profile_blue.route('/collection')
+@login_required
+def user_collection():
+    """
+    用户收藏
+    1、获取参数，页数p，默认1
+    2、检查参数类型
+    3、获取用户信息，定义容器存储查询结果，总页数默认1，当前页默认1
+    4、查询数据库，从用户收藏的的新闻中进行分页，user.collection_news
+    5、获取总页数、当前页、新闻数据
+    6、定义字典列表，遍历查询结果，添加到列表中
+    7、返回模板news/user_collection.html,'total_page',current_page,'collections'
 
+    :return:
+    """
+    user = g.user
+    page = request.args.get('p', '1')
+    try:
+        page = int(page)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.PARAMERR, errmsg='参数类型错误')
+    try:
+        paginate = user.collection_news.paginate(page, constants.USER_COLLECTION_MAX_NEWS, False)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='查询用户收藏数据失败')
+    current_page = paginate.page
+    total_page = paginate.pages
+    news_list = paginate.items
+    news_dict_list = []
+    for news in news_list:
+        news_dict_list.append(news.to_basic_dict())
+    data = {
+        'collections': news_dict_list,
+        'total_page': total_page,
+        'current_page': current_page
+    }
 
+    return render_template('news/user_collection.html', data=data)
 
+@profile_blue.route('/news_list')
+@login_required
+def user_news_list():
+    """
+    用户新闻列表
+    1、获取参数，页数p，默认1
+    2、判断参数，整型
+    3、获取用户信息，定义容器存储查询结果，总页数默认1，当前页默认1
+    4、查询数据库，查询新闻数据并进行分页，
+    5、获取总页数、当前页、新闻数据
+    6、定义字典列表，遍历查询结果，添加到列表中
+    7、返回模板news/user_news_list.html 'total_page',current_page,'news_dict_list'
+
+    :return:
+    """
+    user = g.user
+    page = request.args.get('p', '1')
+    try:
+        page = int(page)
+    except Exception as e:
+        current_app.logger.error(e)
+        page = 1
+    try:
+        paginate = News.query.filter(News.user_id == user.id).paginate(page, constants.USER_COLLECTION_MAX_NEWS,
+                                                                       False)
+        news_list = paginate.items
+        current_page = paginate.page
+        total_page = paginate.pages
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='查询数据错误')
+    news_dict_list = []
+    for news in news_list:
+        news_dict_list.append(news.to_review_dict())
+    data = {
+        'news_list': news_dict_list,
+        'total_page': total_page,
+        'current_page': current_page
+    }
+    return render_template('news/user_news_list.html', data=data)
+
+@profile_blue.route('/user_follow')
+@login_required
+def user_follow():
+    """
+    用户关注
+    1、获取参数，页数p，默认1
+    2、判断参数，整型
+    3、获取用户信息，定义容器存储查询结果，总页数默认1，当前页默认1
+    4、查询数据库，查询新闻数据并进行分页，user.followed.paginate
+    5、获取总页数、当前页、新闻数据
+    6、定义字典列表，遍历查询结果，添加到列表中
+    7、返回模板news/user_follow.html, 'total_page',current_page,'users'
+
+    :return:
+    """
+    user = g.user
+    page = request.args.get('p', '1')
+    try:
+        page = int(page)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.PARAMERR, errmsg='参数类型错误')
+
+    try:
+        paginate = user.followed.paginate(page, constants.USER_FOLLOWED_MAX_COUNT, False)
+        current_page = paginate.page
+        total_page = paginate.pages
+        follows = paginate.items
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='查询数据错误')
+
+    user_follow_list = []
+    for follow in follows:
+        user_follow_list.append(follow.to_dict())
+    data = {
+        'users': user_follow_list,
+        'current_page': current_page,
+        'total_page': total_page
+    }
+    return render_template('news/user_follow.html', data=data)
+
+@profile_blue.route('/other_info')
+@login_required
+def other_info():
+    """
+    查询用户关注的其他用户信息
+    1、获取用户登录信息
+    2、获取参数，user_id
+    3、校验参数，如果不存在404
+    4、如果新闻有作者,并且登录用户关注过作者，is_followed = False
+    5、返回模板news/other.html，is_followed,user,other_info
+    :return:
+    """
+    user = g.user
+    other_id = request.args.get('id')
+    if not other_id:
+        return jsonify(errno=RET.PARAMERR, errmsg='参数错误')
+    try:
+        other = User.query.get(other_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='查询数据错误')
+    if not other:
+        return jsonify(errno=RET.NODATA, errmsg='无数据')
+    is_follwed = False
+    if other and user:
+        if other in user.followed:
+            is_follwed = True
+    data = {
+        'is_followed': is_follwed,
+        'user': user.to_dict() if user else None,
+        'other_info': other.to_dict()
+    }
+    return render_template('news/other.html', data=data)
+
+@profile_blue.route('/other_news_list')
+@login_required
+def other_news_list():
+    """
+    返回指定用户发布的新闻
+    1、获取参数，user_id，p默认1
+    2、页数转成整型
+    3、根据user_id查询用户表，判断查询结果
+    4、如果用户存在，分页用户发布的新闻数据，other.news_list.paginate()
+    5、获取分页数据，总页数、当前页
+    6、遍历数据，转成字典
+    7、返回结果，news_list,total_page,current_page
+    :return:
+    """
+    user_id = request.args.get('user_id')
+    page = request.args.get('p', '1')
+    try:
+        page = int(page)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.PARAMERR, errmsg='参数错误')
+    try:
+        other = User.query.get(user_id)
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='查询数据库错误')
+    if not other:
+        return jsonify(errno=RET.NODATA, errmsg='用户不存在')
+    try:
+        paginate = other.news_list.paginate(page, constants.USER_COLLECTION_MAX_NEWS, False)
+        news_list = paginate.items
+        current_page = paginate.page
+        total_page = paginate.pages
+    except Exception as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg='查询数据错误')
+    news_dict_list = []
+    for news in news_list:
+        news_dict_list.append(news.to_basic_dict())
+    data = {
+        'news_list': news_dict_list,
+        'total_page': total_page,
+        'current_page': current_page
+    }
+    return jsonify(errno=RET.OK, errmsg='OK', data=data)
 
 
     pass

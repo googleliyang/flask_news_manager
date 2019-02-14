@@ -334,4 +334,10 @@ function logout(){
     })
 }
 
+// 添加管理员退出代码
+function adminlogout(){
+    $.get('/logout',function(resp){
+        window.location.href = '/'
+    })
+}
 

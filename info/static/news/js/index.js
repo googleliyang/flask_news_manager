@@ -63,7 +63,7 @@ function updateNewsData() {
         "cid":currentCid,
         "page":cur_page
     }
-
+    // http://127.0.0.1:5000/news_list?cid=1&page=1
     $.get("/news_list",params,function(resp){
         data_querying = false
         if (resp.errno == "0"){
